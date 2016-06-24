@@ -1,0 +1,2 @@
+source .virtualenv/bin/predeactivate
+deactivate
