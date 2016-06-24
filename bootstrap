@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+set -e
+trap "exit 1" INT
+
+: ${VIRTUALENV_NAME:="mesos-cli"}
+
+# If we already have a virtual environment activates,
+# bail out and advise the user to deactivate.
+OLD_VIRTUAL_ENV=${VIRTUAL_ENV}
+if [ "${OLD_VIRTUAL_ENV}" != "" ]; then
+    echo "Please deactivate your current virtual environment in order to continue!"
+    exit 1
+fi
+
+# Verify that python 2.7, pip, and virtualenv are installed.
+PYTHON=$(which python) || true
+PIP=$(which pip) || true
+VIRTUALENV=$(which virtualenv) || true
+if [ "${PYTHON}" = "" ] || [ "${PIP}" = "" ] || [ "${VIRTUALENV}" = "" ]; then
+  echo "You must have python, pip, and virtualenv installed in order to continue..."
+  exit 1
+fi
+PYTHON_MAJOR=$(python -c 'import sys; print sys.version_info[0]')
+PYTHON_MINOR=$(python -c 'import sys; print sys.version_info[1]')
+if [ "${PYTHON_MAJOR}" != "2" ] || [ "${PYTHON_MINOR}" != "7" ]; then
+  echo "You must be running python 2.7.x in order to continue..."
+  exit 1
+fi
+
+# Set up a virtual environment for the CLI
+export VIRTUALENV_NAME=$(pwd)/.virtualenv
+
+virtualenv --python=$(which python) \
+           --clear \
+           --no-site-packages \
+           --prompt="(mesos-cli) " \
+           ${VIRTUALENV_NAME} || true
+
+source ${VIRTUALENV_NAME}/bin/activate
+SITE_PACKAGES=$(python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
+echo "$(pwd)/lib" > ${SITE_PACKAGES}/_virtualenv_path_extensions.pth
+pip install --upgrade pip
+pip install -r pip-requirements.txt
+deactivate
+
+# Add custom postactivate / predeactivate scripts to add / remove
+# the bin directory of this project to the current path in the
+# virtual environment (as well as setup bash auto completion).
+cat > ${VIRTUALENV_NAME}/bin/postactivate << EOF
+#!/usr/bin/env bash
+PROJECT_BIN="${PWD}/bin"
+PATH="\${PROJECT_BIN}:\${PATH}"
+
+EOF
+cat mesos.bash_completion >> ${VIRTUALENV_NAME}/bin/postactivate
+
+cat > ${VIRTUALENV_NAME}/bin/predeactivate << EOF
+#!/usr/bin/env bash
+PROJECT_BIN="${PWD}/bin"
+PATH=\${PATH/":\${PROJECT_BIN}"/}
+PATH=\${PATH/"\${PROJECT_BIN}:"/}
+
+complete -r mesos
+EOF
+
+# Print some info about the sucess of the installation.
+echo ""
+echo "Setup complete!"
+echo ""
+echo "To begin working, simply activate your virtual"
+echo "environment and deactivate it when you are done."
+echo ""
+echo "    $ source activate"
+echo "    $ mesos <command> [<args>...]"
+echo "    $ source deactivate"
+echo ""

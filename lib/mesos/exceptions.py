@@ -1,0 +1,3 @@
+
+class CLIException(Exception):
+    pass
