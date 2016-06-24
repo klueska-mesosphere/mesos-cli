@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+_mesos() {
+    local cur cmd args rets
+    local option words
+    local OIFS
+
+    cur="${COMP_WORDS[${COMP_CWORD}]}"
+    cmd="${COMP_WORDS[0]}"
+    args=(${COMP_WORDS[@]:1})
+
+    OIFS=${IFS}
+    IFS=$'\n'
+    rets=($(${COMP_WORDS[0]} __autocomplete__ "${cur}" ${args[*]}))
+    IFS=${OIFS}
+
+    option="${rets[0]}"
+    words="${rets[1]}"
+
+    complete -o ${option} -F _mesos mesos
+    COMPREPLY=( $(compgen -W "${words}" -- ${cur}) )
+    if [ "${#COMPREPLY[@]}" = "0" ]; then
+        complete -o nospace -F _mesos mesos
+        COMPREPLY=()
+    fi
+    return 0
+}
+complete -F _mesos mesos
+
