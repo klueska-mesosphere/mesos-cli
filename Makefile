@@ -17,6 +17,10 @@ $(EXEC):
 	             $(HIDDEN_IMPORTS) \
 	             --onefile bin/$(EXEC)
 
+check:
+	@echo "Running Unit Tests"
+	@python tests/main.py
+
 clean:
 	find . -name "*.pyc" | xargs rm -rf
 	rm -rf $(SPECPATH)/*.spec $(WORKPATH) $(DISTPATH)/$(EXEC)
