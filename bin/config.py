@@ -20,6 +20,7 @@ AGENT_PORT = "5051"
 
 # The builtin plugins.
 PLUGINS = [
+    os.path.join(PROJECT_DIR, "lib/mesos/plugins", "container"),
     os.path.join(PROJECT_DIR, "lib/mesos/plugins", "example")
 ]
 
