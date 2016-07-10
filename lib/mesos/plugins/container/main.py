@@ -1,17 +1,16 @@
 import ctypes
 import curses
-import json
 import os
 import subprocess
 import sys
 import time
-import urllib2
 
 from curses.ascii import isprint
 from multiprocessing import Process, Manager
 from socket import error as socket_error
 
 import config
+import mesos.util
 
 from mesos.exceptions import CLIException
 from mesos.plugins import PluginBase
@@ -142,81 +141,10 @@ class Container(PluginBase):
                 raise CLIException("Failed to mount '{namespace}' namespace"
                                    .format(namespace=namespace))
 
-    # Hit the specified endpoint and return the results as JSON.
-    def __hit_endpoint(self, addr, endpoint):
-        try:
-            url = "http://{addr}/{endpoint}".format(
-                  addr=addr, endpoint=endpoint)
-
-            http_response = urllib2.urlopen(url).read().decode("utf-8")
-        except Exception as exception:
-            raise CLIException("Could not open '{url}': {error}"
-                               .format(url=url, error=str(exception)))
-
-        try:
-            return json.loads(http_response)
-        except Exception as exception:
-            raise CLIException("Could load JSON from '{url}': {error}"
-                               .format(url=url, error=str(exception)))
-
-    # Read a file from a master / agent node's sandbox.
-    def __read_file(self, addr, path):
-        # It is undocumented, but calling the `/files/read` endpoint
-        # and setting `offset=-1` returns the length of the file. We
-        # leverage this here to first get the length of the file
-        # before reading it. Unfortunately, there is no way to just
-        # read the file without first getting its length.
-        try:
-            endpoint = "files/read?path={path}&offset=-1".format(path=path)
-            data = self.__hit_endpoint(addr, endpoint)
-        except Exception as exception:
-            raise CLIException("Could not read file length '{path}': {error}"
-                               .format(path=path, error=str(exception)))
-
-        length = data['offset']
-        if length == 0:
-            return
-
-        # Read the file in 1024 byte chunks and yield the results to
-        # the caller. Reading this way allows us to get real-time
-        # updates of the data instead of waiting for the whole file to
-        # be downloaded.
-        offset = 0
-        chunk_size = 1024
-        if (length - offset) < chunk_size:
-            chunk_size = length - offset
-
-        while True:
-            try:
-                endpoint = ("files/read?"
-                            "path={path}&"
-                            "offset={offset}"
-                            "&length={length}"
-                            .format(path=path,
-                                    offset=offset,
-                                    length=chunk_size))
-
-                data = self.__hit_endpoint(addr, endpoint)
-            except Exception as exception:
-                raise CLIException("Could not read from file '{path}'"
-                                   " at offset '{offset}: {error}"
-                                   .format(path=path,
-                                           offset=offset,
-                                           error=str(exception)))
-
-            yield data['data']
-
-            offset += len(data['data'])
-            if offset == length:
-                break
-
-            if (length - offset) < chunk_size:
-                chunk_size = length - offset
-
     # Retreives the full container id from a partial container id.
     def __get_container(self, addr, container_id):
         try:
-            containers = self.__hit_endpoint(addr, "/containers")
+            containers = mesos.util.hit_endpoint(addr, "/containers")
         except Exception as exception:
             raise CLIException("Could not read from '/containers'"
                                " endpoint: {error}"
@@ -280,7 +208,7 @@ class Container(PluginBase):
 
     def ps(self,argv):
         try:
-            containers = self.__hit_endpoint(argv["--addr"], "/containers")
+            containers = mesos.util.hit_endpoint(argv["--addr"], "/containers")
         except Exception as exception:
             raise CLIException("Could not read from '/containers'"
                                " endpoint: {error}"
@@ -344,19 +272,24 @@ class Container(PluginBase):
                                        container=container["container_id"],
                                        error=str(exception)))
 
+        # We ignore cases where it is normal
+        # to exit a program via <ctrl-C>.
+        except KeyboardInterrupt:
+            pass
+
     def logs(self, argv):
         try:
-            state = self.__hit_endpoint(argv["--addr"], "/state")
+            state = mesos.util.hit_endpoint(argv["--addr"], "/state")
         except Exception as exception:
             raise CLIException("Unable to read from '/state' endpoint: {error}"
                                .format(error=str(exception)))
 
         try:
-            executors = [
-                executor
-                for framework in state["frameworks"]
-                for executor in framework["executors"]
-                if executor["container"].startswith(argv["<container-id>"])]
+            executors = [executor
+                         for framework in state["frameworks"]
+                         for executor in framework["executors"]
+                         if (executor["container"]
+                             .startswith(argv["<container-id>"]))]
         except Exception as exception:
             raise CLIException("Unable to index into state matched"
                                " from the '/state' endpoint: {error}"
@@ -378,7 +311,7 @@ class Container(PluginBase):
                                    " 'stdout' file: {error}"
                                    .format(error=str(exception)))
             try:
-                for line in self.__read_file(argv["--addr"], stdout_file):
+                for line in mesos.util.read_file(argv["--addr"], stdout_file):
                     print(line)
             except Exception as exception:
                 raise CLIException("Unable to read from 'stdout' file: {error}"
@@ -393,7 +326,7 @@ class Container(PluginBase):
                                    " 'stderr' file: {error}"
                                    .format(error=str(exception)))
             try:
-                for line in self.__read_file(argv["--addr"], stderr_file):
+                for line in mesos.util.read_file(argv["--addr"], stderr_file):
                     print(line)
             except Exception as exception:
                 raise CLIException("Unable to read from 'stderr' file: {error}"
@@ -550,7 +483,7 @@ class Container(PluginBase):
         self.__verify_root()
 
         try:
-            flags = self.__hit_endpoint(argv["--addr"], "/flags")
+            flags = mesos.util.hit_endpoint(argv["--addr"], "/flags")
         except Exception as exception:
             raise CLIException("Unable to read from '/flags' endpoint: {error}"
                                .format(error=str(exception)))

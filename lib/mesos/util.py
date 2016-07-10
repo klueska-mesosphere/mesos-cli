@@ -1,7 +1,9 @@
 import imp
 import importlib
+import json
 import os
 import textwrap
+import urllib2
 
 from mesos.exceptions import CLIException
 
@@ -109,6 +111,76 @@ def format_subcommands_help(cmd):
 
     return (arguments, short_help, long_help, flag_string)
 
+# Hit the specified endpoint and return the results as JSON.
+def hit_endpoint(addr, endpoint):
+    try:
+        url = "http://{addr}/{endpoint}".format(
+              addr=addr, endpoint=endpoint)
+
+        http_response = urllib2.urlopen(url).read().decode("utf-8")
+    except Exception as exception:
+        raise CLIException("Could not open '{url}': {error}"
+                           .format(url=url, error=str(exception)))
+
+    try:
+        return json.loads(http_response)
+    except Exception as exception:
+        raise CLIException("Could load JSON from '{url}': {error}"
+                           .format(url=url, error=str(exception)))
+
+# Read a file from a master / agent node's sandbox.
+def read_file(addr, path):
+    # It is undocumented, but calling the `/files/read` endpoint
+    # and setting `offset=-1` returns the length of the file. We
+    # leverage this here to first get the length of the file
+    # before reading it. Unfortunately, there is no way to just
+    # read the file without first getting its length.
+    try:
+        endpoint = "files/read?path={path}&offset=-1".format(path=path)
+        data = hit_endpoint(addr, endpoint)
+    except Exception as exception:
+        raise CLIException("Could not read file length '{path}': {error}"
+                           .format(path=path, error=str(exception)))
+
+    length = data['offset']
+    if length == 0:
+        return
+
+    # Read the file in 1024 byte chunks and yield the results to
+    # the caller. Reading this way allows us to get real-time
+    # updates of the data instead of waiting for the whole file to
+    # be downloaded.
+    offset = 0
+    chunk_size = 1024
+    if (length - offset) < chunk_size:
+        chunk_size = length - offset
+
+    while True:
+        try:
+            endpoint = ("files/read?"
+                        "path={path}&"
+                        "offset={offset}"
+                        "&length={length}"
+                        .format(path=path,
+                                offset=offset,
+                                length=chunk_size))
+
+            data = hit_endpoint(addr, endpoint)
+        except Exception as exception:
+            raise CLIException("Could not read from file '{path}'"
+                               " at offset '{offset}: {error}"
+                               .format(path=path,
+                                       offset=offset,
+                                       error=str(exception)))
+
+        yield data['data']
+
+        offset += len(data['data'])
+        if offset == length:
+            break
+
+        if (length - offset) < chunk_size:
+            chunk_size = length - offset
 
 class Table:
     """ Defines a custom table structure for printing to the terminal. """
