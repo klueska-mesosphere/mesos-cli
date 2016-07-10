@@ -108,3 +108,40 @@ def format_subcommands_help(cmd):
             flag_string += "  %s%s%s\n" % (flag, " " * num_spaces, flags[flag])
 
     return (arguments, short_help, long_help, flag_string)
+
+
+class Table:
+    """ Defines a custom table structure for printing to the terminal. """
+
+    # Takes a list of column names
+    def __init__(self, columns):
+        self.padding = []
+        self.table = [columns]
+        for column in columns:
+            self.padding.append(len(column))
+
+    # Takes a row entry for every column
+    def add_row(self, row):
+        # Number of entries and columns do not match
+        if len(row) != len(self.table[0]):
+            return
+
+        # Adjust padding for each column
+        for index in range(len(row)):
+            if len(row[index]) > self.padding[index]:
+                self.padding[index] = len(row[index])
+
+        self.table.append(row)
+
+    def __str__(self):
+        table_string = ""
+        for r, row in enumerate(self.table):
+            for index in range(len(row)):
+                entry = row[index]
+                table_string += "%s%s" % \
+                        (entry, " " * (self.padding[index] - len(entry) + 2))
+
+            if r != len(self.table) - 1:
+                table_string += "\n"
+
+        return table_string
