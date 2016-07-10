@@ -7,11 +7,16 @@ environment variables or parsing a configuration file.
 import os
 import sys
 import json
+import subprocess
 
 from mesos.exceptions import CLIException
 
 # The top-level directory of this project.
 PROJECT_DIR = os.path.join(os.path.dirname(__file__), os.pardir)
+
+# Default IP for the agent.
+AGENT_IP = "127.0.0.1"
+AGENT_PORT = "5051"
 
 # The builtin plugins.
 PLUGINS = [
@@ -23,6 +28,18 @@ if os.environ.get("MESOS_CLI_CONFIG_FILE"):
     try:
         with open(os.environ["MESOS_CLI_CONFIG_FILE"]) as data_file:
             with json.load(data_file) as config_data:
+                if "agent_ip" in config_data:
+                    if not isinstance(config_data["agent_ip"], str):
+                        raise CLIException("'agent_ip' field must be a string")
+
+                    AGENT_IP = config_data["agent_ip"]
+
+                if "agent_port" in config_data:
+                    if not isinstance(config_data["agent_port"], str):
+                        raise CLIException("'agent_port' field must be a string")
+
+                    AGENT_IP = config_data["agent_port"]
+
                 if "plugins" in config_data:
                     if not isinstance(config_data["plugins"], list):
                         raise CLIException("'plugins' field must be a list")
@@ -39,3 +56,30 @@ if os.environ.get("MESOS_CLI_CONFIG_FILE"):
 # plugin. All paths must be absolute.
 if os.environ.get("MESOS_CLI_PLUGINS"):
     PLUGINS += filter(None, os.environ.get("MESOS_CLI_PLUGINS").split(":"))
+
+# Override the agent IP and port from the environment. We use the
+# standard Mesos environment variables for `MESOS_IP`,
+# `MESOS_IP_DISCOVERY_COMMAND` and `MESOS_PORT` to get the agent IP
+# and port. We also provide our own `MESOS_CLI_AGENT_IP` and
+# `MESOS_CLI_AGENT_PORT` environment variables as a way of overriding
+# the others.
+if os.environ.get("MESOS_IP_DISCOVERY_COMMAND"):
+    try:
+        AGENT_IP = subprocess.check_output(
+            os.environ.get("MESOS_IP_DISCOVERY_COMMAND"),
+            shell=True).strip()
+    except Exception as exception:
+        sys.exit("Unable to run MESOS_IP_DISCOVERY_COMMAND: {error}"
+                 .format(error=str(exception)))
+
+if os.environ.get("MESOS_IP"):
+    AGENT_IP = os.environ.get("MESOS_IP").strip()
+
+if os.environ.get("MESOS_CLI_AGENT_IP"):
+    AGENT_IP = os.environ.get("MESOS_CLI_AGENT_IP").strip()
+
+if os.environ.get("MESOS_PORT"):
+    AGENT_PORT = os.environ.get("MESOS_PORT").strip()
+
+if os.environ.get("MESOS_CLI_AGENT_PORT"):
+    AGENT_PORT = os.environ.get("MESOS_CLI_AGENT_PORT").strip()
