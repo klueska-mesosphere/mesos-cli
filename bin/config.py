@@ -27,24 +27,30 @@ PLUGINS = [
 if os.environ.get("MESOS_CLI_CONFIG_FILE"):
     try:
         with open(os.environ["MESOS_CLI_CONFIG_FILE"]) as data_file:
-            with json.load(data_file) as config_data:
-                if "agent_ip" in config_data:
-                    if not isinstance(config_data["agent_ip"], str):
-                        raise CLIException("'agent_ip' field must be a string")
+            try:
+                config_data = json.load(data_file)
+            except Exception as exception:
+                raise CLIException("Error loading config file as json: {error}"
+                                                    .format(error=exception))
 
-                    AGENT_IP = config_data["agent_ip"]
+            if "agent_ip" in config_data:
+                if not isinstance(config_data["agent_ip"], basestring):
+                    raise CLIException("'agent_ip' field must be a string")
 
-                if "agent_port" in config_data:
-                    if not isinstance(config_data["agent_port"], str):
-                        raise CLIException("'agent_port' field must be a string")
+                AGENT_IP = config_data["agent_ip"]
 
-                    AGENT_IP = config_data["agent_port"]
+            if "agent_port" in config_data:
+                if not isinstance(config_data["agent_port"], basestring):
+                    raise CLIException("'agent_port' "
+                                       "field must be a string")
 
-                if "plugins" in config_data:
-                    if not isinstance(config_data["plugins"], list):
-                        raise CLIException("'plugins' field must be a list")
+                AGENT_PORT = config_data["agent_port"]
 
-                    PLUGINS.extend(config_data["plugins"])
+            if "plugins" in config_data:
+                if not isinstance(config_data["plugins"], list):
+                    raise CLIException("'plugins' field must be a list")
+
+                PLUGINS.extend(config_data["plugins"])
 
     except Exception as exception:
         sys.exit("Unable to parse configuration file '{config}': {error}"
