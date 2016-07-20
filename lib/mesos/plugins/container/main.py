@@ -9,7 +9,7 @@ from curses.ascii import isprint
 from multiprocessing import Process, Manager
 from socket import error as socket_error
 
-import config
+import mesos.config as config
 import mesos.util
 
 from mesos.exceptions import CLIException

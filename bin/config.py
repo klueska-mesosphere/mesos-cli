@@ -24,6 +24,11 @@ PLUGINS = [
     os.path.join(PROJECT_DIR, "lib/mesos/plugins", "example")
 ]
 
+# Absolute directory to the executables required by commands and test cases
+# If left empty string, assumed they are in the path. Path must end with a /
+# Example: '/tmp/bin/'
+EXECUTABLE_DIR = ''
+
 # Allow all configuration variables to be updated from a config file.
 if os.environ.get("MESOS_CLI_CONFIG_FILE"):
     try:
@@ -46,6 +51,16 @@ if os.environ.get("MESOS_CLI_CONFIG_FILE"):
                                        "field must be a string")
 
                 AGENT_PORT = config_data["agent_port"]
+
+            if "executable_dir" in config_data:
+                if not isinstance(config_data["executable_dir"], basestring):
+                    raise CLIException("'master_port'"
+                                        " field must be a string")
+                if len(config_data["executable_dir"]) != 0 \
+                        and not config_data["executable_dir"].endswith('/'):
+                    raise CLIException("exectuable_dir must end with /")
+
+                EXECUTABLE_DIR = config_data["executable_dir"]
 
             if "plugins" in config_data:
                 if not isinstance(config_data["plugins"], list):
