@@ -5,7 +5,7 @@ import sys
 import subprocess
 from socket import error as socket_error
 
-import config
+import mesos.config as config
 import mesos.util
 
 from mesos.exceptions import CLIException
