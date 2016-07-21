@@ -3,7 +3,7 @@ import sys
 from socket import error as socket_error
 import urllib2
 
-import config
+import mesos.config as config
 import mesos.util
 
 from mesos.exceptions import CLIException
